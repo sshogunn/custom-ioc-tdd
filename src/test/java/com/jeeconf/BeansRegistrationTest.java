@@ -1,6 +1,8 @@
 package com.jeeconf;
 
 
+import com.jeeconf.testing.Presentation;
+import com.jeeconf.testing.Training;
 import org.junit.Test;
 
 import static org.hamcrest.core.Is.is;
@@ -18,6 +20,18 @@ public class BeansRegistrationTest {
         //WHEN
         Training training = injector.get(Training.class);
 
+        //THEN
+        assertThat(training, is(notNullValue()));
+    }
+
+    @Test
+    public void shouldRegisterBeanWithConcreteTypeWhenItIsPassedOnRegistration() {
+        //GIVEN
+        DependenciesConfig config = new DependenciesConfig();
+        config.register(Training.class).as(Presentation.class);
+        JEEConfInjector injector = new JEEConfInjector(config);
+        //WHEN
+        Presentation training = injector.get(Presentation.class);
         //THEN
         assertThat(training, is(notNullValue()));
     }
