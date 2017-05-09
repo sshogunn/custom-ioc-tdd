@@ -8,7 +8,16 @@ class JEEConfInjector {
     }
 
     <T> T get(Class<T> trainingClass) {
-        Class<T> registeredClass = config.findClass(trainingClass);
+        T instance = config.findInstance(trainingClass);
+        if (instance == null) {
+            return createNewInstance(trainingClass);
+        } else {
+            return instance;
+        }
+    }
+
+    private <T> T createNewInstance(Class<T> clazz) {
+        Class<T> registeredClass = config.findClass(clazz);
         try {
             return registeredClass.newInstance();
         } catch (InstantiationException | IllegalAccessException e) {
