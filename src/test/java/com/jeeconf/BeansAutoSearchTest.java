@@ -1,6 +1,7 @@
 package com.jeeconf;
 
 import com.jeeconf.testing.autosearch.Sponsor;
+import com.jeeconf.testing.typed.Visitor;
 import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -17,5 +18,15 @@ public class BeansAutoSearchTest {
         Sponsor sponsor = new JEEConfInjector(config).get(Sponsor.class);
         //THEN
         assertThat(sponsor, is(notNullValue()));
+    }
+
+    @Test
+    public void shouldRegisterBeanByTypeWhenAutoSearchIsEnabled() {
+        //GIVEN
+        DependenciesConfig config = new DependenciesConfig("com.jeeconf.testing.typed");
+        //WHEN
+        Visitor speaker = new JEEConfInjector(config).get(Visitor.class);
+        //THEN
+        assertThat(speaker, is(notNullValue()));
     }
 }

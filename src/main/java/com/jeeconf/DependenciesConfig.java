@@ -1,6 +1,7 @@
 package com.jeeconf;
 
 import com.jeeconf.annotations.JEEConfComponent;
+import com.jeeconf.annotations.JEEConfComponentType;
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
 
 import java.util.HashMap;
@@ -25,7 +26,16 @@ class DependenciesConfig {
                 .getNamesOfClassesWithAnnotation(JEEConfComponent.class)
                 .stream()
                 .map(this::loadClass)
-                .forEach(c -> register(c).complete());
+                .forEach(this::registerBean);
+    }
+
+    private void registerBean(Class<?> beanClass) {
+        Class<?> beanType = beanClass;
+        JEEConfComponentType typeAnn = beanClass.getAnnotation(JEEConfComponentType.class);
+        if (typeAnn != null) {
+            beanType = typeAnn.value();
+        }
+        register(beanClass).as(beanType).complete();
     }
 
     private Class<?> loadClass(String name) {
