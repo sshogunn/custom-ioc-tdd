@@ -3,6 +3,7 @@ package com.jeeconf;
 import com.jeeconf.annotations.AutoSearch;
 import com.jeeconf.annotations.JEEConfComponent;
 import com.jeeconf.annotations.JEEConfComponentType;
+import com.jeeconf.annotations.Key;
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
 
 import java.lang.reflect.Constructor;
@@ -13,7 +14,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 class DependenciesConfig {
-    private Map<Class<?>, Object> regInstances = new HashMap<>();
+    private Map<Identity, Object> regInstances = new HashMap<>();
     private String path;
 
     DependenciesConfig() {
@@ -63,7 +64,13 @@ class DependenciesConfig {
         Class<?>[] paramTypes = constructor.getParameterTypes();
         Object[] params = new Object[paramTypes.length];
         for (int i = 0; i < paramTypes.length; i++) {
-            params[i] = findInstance(paramTypes[i]);
+            Key keyAnn = constructor.getParameters()[i].getAnnotation(Key.class);
+            Class<?> paramType = paramTypes[i];
+            if (keyAnn == null) {
+                params[i] = findInstance(paramType);
+            } else {
+                params[i] = findInstance(paramType, keyAnn.value());
+            }
         }
         Object instance = loadObjectWithParams(constructor, params);
         register(instance).as(beanType).complete();
@@ -113,17 +120,44 @@ class DependenciesConfig {
 
     @SuppressWarnings("unchecked")
     <T> T findInstance(Class<T> type) {
-        Class<?> key = regInstances.keySet().stream().filter(i -> Objects.equals(i, type)).findFirst().get();
+        Identity key = identityBaseStream(type)
+                .findFirst()
+                .get();
         return (T) regInstances.get(key);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T findInstance(Class<?> type, String keyId) {
+        Identity key = identityBaseStream(type)
+                .filter(i -> Objects.equals(i.key, keyId))
+                .findFirst()
+                .get();
+        return (T) regInstances.get(key);
+    }
+
+    private Stream<Identity> identityBaseStream(Class<?> type) {
+        return regInstances.keySet()
+                .stream()
+                .filter(i -> Objects.equals(i.type, type));
     }
 
     public class Registration {
         private Object instance;
         private Class<?> type;
+        private String key;
 
         Registration(Object instance) {
             this.instance = instance;
             this.type = instance.getClass();
+            this.key = extractBeanKeyId();
+        }
+
+        private String extractBeanKeyId() {
+            Key keyAnn = this.type.getAnnotation(Key.class);
+            if (keyAnn != null) {
+                return keyAnn.value();
+            }
+            return null;
         }
 
         Registration as(Class<?> type) {
@@ -132,7 +166,31 @@ class DependenciesConfig {
         }
 
         void complete() {
-            regInstances.put(type, instance);
+            regInstances.put(new Identity(type, key), instance);
+        }
+    }
+
+    private class Identity {
+        private Class<?> type;
+        private String key;
+
+        Identity(Class<?> type, String key) {
+            this.type = type;
+            this.key = key;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Identity identity = (Identity) o;
+            return com.google.common.base.Objects.equal(type, identity.type) &&
+                    com.google.common.base.Objects.equal(key, identity.key);
+        }
+
+        @Override
+        public int hashCode() {
+            return com.google.common.base.Objects.hashCode(type, key);
         }
     }
 }
