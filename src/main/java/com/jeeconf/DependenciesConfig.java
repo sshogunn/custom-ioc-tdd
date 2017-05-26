@@ -1,11 +1,41 @@
 package com.jeeconf;
 
+import com.jeeconf.annotations.JEEConfComponent;
+import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
 class DependenciesConfig {
     private Map<Class<?>, Object> regInstances = new HashMap<>();
+    private String path;
+
+    DependenciesConfig() {
+    }
+
+    DependenciesConfig(String path) {
+        this.path = path;
+        loadBeansByAutoSearch();
+    }
+
+    private void loadBeansByAutoSearch() {
+        new FastClasspathScanner(path)
+                .scan()
+                .getNamesOfClassesWithAnnotation(JEEConfComponent.class)
+                .stream()
+                .map(this::loadClass)
+                .forEach(c -> register(c).complete());
+    }
+
+    private Class<?> loadClass(String name) {
+        try {
+            return getClass().getClassLoader().loadClass(name);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("Cannot load class " + name, e);
+        }
+    }
+
 
     Registration register(Class<?> regClass) {
         Object instance = loadObject(regClass);
