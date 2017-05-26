@@ -12,6 +12,10 @@ class DependenciesConfig {
         return new Registration(instance);
     }
 
+    Registration register(Object instance) {
+        return new Registration(instance);
+    }
+
     private Object loadObject(Class<?> regClass) {
         try {
             return regClass.newInstance();

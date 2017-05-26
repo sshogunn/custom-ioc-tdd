@@ -31,6 +31,19 @@ public class BeansRegistrationTest {
         //WHEN
         Presentation training = injector.get(Presentation.class);
         //THEN
-        assertThat(training, is(notNullValue()));//
+        assertThat(training, is(notNullValue()));
+    }
+
+    @Test
+    public void shouldReturnBeanRegisteredAsObject() {
+        //GIVEN
+        DependenciesConfig config = new DependenciesConfig();
+        Training expected = new Training();
+        config.register(expected).complete();
+        JEEConfInjector injector = new JEEConfInjector(config);
+        //WHEN
+        Training training = injector.get(Training.class);
+        //THEN
+        assertThat(training, is(notNullValue()));
     }
 }
