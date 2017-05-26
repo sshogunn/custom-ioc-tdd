@@ -1,9 +1,6 @@
 package com.jeeconf;
 
-import com.jeeconf.annotations.AutoSearch;
-import com.jeeconf.annotations.JEEConfComponent;
-import com.jeeconf.annotations.JEEConfComponentType;
-import com.jeeconf.annotations.Key;
+import com.jeeconf.annotations.*;
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
 
 import java.lang.reflect.Constructor;
@@ -14,7 +11,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 class DependenciesConfig {
-    private Map<Identity, Object> regInstances = new HashMap<>();
+    private Map<Identity, Implementation> regInstances = new HashMap<>();
     private String path;
 
     DependenciesConfig() {
@@ -123,7 +120,7 @@ class DependenciesConfig {
         Identity key = identityBaseStream(type)
                 .findFirst()
                 .get();
-        return (T) regInstances.get(key);
+        return (T) searchInstanceBy(key);
     }
 
     @SuppressWarnings("unchecked")
@@ -132,7 +129,15 @@ class DependenciesConfig {
                 .filter(i -> Objects.equals(i.key, keyId))
                 .findFirst()
                 .get();
-        return (T) regInstances.get(key);
+        return (T) searchInstanceBy(key);
+    }
+
+    private Object searchInstanceBy(Identity key) {
+        Implementation impl = regInstances.get(key);
+        if (impl.instance != null) {
+            return impl.instance;
+        }
+        return loadObject(impl.implClass);
     }
 
     private Stream<Identity> identityBaseStream(Class<?> type) {
@@ -145,11 +150,13 @@ class DependenciesConfig {
         private Object instance;
         private Class<?> type;
         private String key;
+        private boolean isPrototype;
 
         Registration(Object instance) {
             this.instance = instance;
             this.type = instance.getClass();
             this.key = extractBeanKeyId();
+            this.isPrototype = checkOnPrototype();
         }
 
         private String extractBeanKeyId() {
@@ -160,13 +167,23 @@ class DependenciesConfig {
             return null;
         }
 
+        private boolean checkOnPrototype() {
+            return type.getAnnotation(ForeverNotAlone.class) != null;
+        }
+
         Registration as(Class<?> type) {
             this.type = type;
             return this;
         }
 
         void complete() {
-            regInstances.put(new Identity(type, key), instance);
+            Implementation impl = new Implementation();
+            if (isPrototype) {
+                impl.implClass = instance.getClass();
+            } else {
+                impl.instance = instance;
+            }
+            regInstances.put(new Identity(type, key), impl);
         }
     }
 
@@ -192,5 +209,10 @@ class DependenciesConfig {
         public int hashCode() {
             return com.google.common.base.Objects.hashCode(type, key);
         }
+    }
+
+    private class Implementation {
+        private Object instance;
+        private Class<?> implClass;
     }
 }
