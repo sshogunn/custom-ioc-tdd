@@ -1,12 +1,16 @@
 package com.jeeconf;
 
+import com.jeeconf.annotations.AutoSearch;
 import com.jeeconf.annotations.JEEConfComponent;
 import com.jeeconf.annotations.JEEConfComponentType;
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 class DependenciesConfig {
     private Map<Class<?>, Object> regInstances = new HashMap<>();
@@ -21,21 +25,57 @@ class DependenciesConfig {
     }
 
     private void loadBeansByAutoSearch() {
-        new FastClasspathScanner(path)
+        loadBeansWithoutDep();
+        loadBeansWithDep();
+    }
+
+    private void loadBeansWithoutDep() {
+        beanClassesStream()
+                .filter(c -> c.getConstructors().length == 1)
+                .filter(c -> c.getConstructors()[0].getParameterCount() == 0)
+                .forEach(this::registerBean);
+    }
+
+    private void loadBeansWithDep() {
+        beanClassesStream()
+                .filter(c -> c.getConstructors()[0].getParameterCount() > 0)
+                .filter(c -> c.getConstructors()[0].getAnnotation(AutoSearch.class) != null)
+                .forEach(this::registerBeanWithDep);
+    }
+
+    private Stream<? extends Class<?>> beanClassesStream() {
+        return new FastClasspathScanner(path)
                 .scan()
                 .getNamesOfClassesWithAnnotation(JEEConfComponent.class)
                 .stream()
                 .map(this::loadClass)
-                .forEach(this::registerBean);
+                .filter(c -> c.getConstructors().length == 1);
     }
 
     private void registerBean(Class<?> beanClass) {
+        Class<?> beanType = getBeanType(beanClass);
+        register(beanClass).as(beanType).complete();
+    }
+
+    private void registerBeanWithDep(Class<?> beanClass) {
+        Class<?> beanType = getBeanType(beanClass);
+        Constructor<?> constructor = beanClass.getConstructors()[0];
+        Class<?>[] paramTypes = constructor.getParameterTypes();
+        Object[] params = new Object[paramTypes.length];
+        for (int i = 0; i < paramTypes.length; i++) {
+            params[i] = findInstance(paramTypes[i]);
+        }
+        Object instance = loadObjectWithParams(constructor, params);
+        register(instance).as(beanType).complete();
+    }
+
+    private Class<?> getBeanType(Class<?> beanClass) {
         Class<?> beanType = beanClass;
         JEEConfComponentType typeAnn = beanClass.getAnnotation(JEEConfComponentType.class);
         if (typeAnn != null) {
             beanType = typeAnn.value();
         }
-        register(beanClass).as(beanType).complete();
+        return beanType;
     }
 
     private Class<?> loadClass(String name) {
@@ -45,7 +85,6 @@ class DependenciesConfig {
             throw new RuntimeException("Cannot load class " + name, e);
         }
     }
-
 
     Registration register(Class<?> regClass) {
         Object instance = loadObject(regClass);
@@ -61,6 +100,14 @@ class DependenciesConfig {
             return regClass.newInstance();
         } catch (InstantiationException | IllegalAccessException e) {
             throw new RuntimeException("Cannot load class instance", e);
+        }
+    }
+
+    private Object loadObjectWithParams(Constructor<?> constructor, Object[] params) {
+        try {
+            return constructor.newInstance(params);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException("Cannot create instance with params", e);
         }
     }
 
